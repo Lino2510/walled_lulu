@@ -1,46 +1,70 @@
 const Joi = require("joi");
-const transactionService = require("../services/transaction.service");
-const { transactionResponse } = require("../dto/transaction.Response");
+const transactionService = require("../services/transactions.service");
 
-const transactionSchema = Joi.object({
-  date_time: Joi.string().required(),
-  type: Joi.string().required(),
-  from_to: Joi.string().required(),
-  description: Joi.string().required(),
-  amount: Joi.string().required(),
-  user_id: Joi.string().required(),
+const topUpSchema = Joi.object({
+  amount: Joi.number().positive().precision(2).required(),
+  description: Joi.string().optional(),
 });
 
+const transferSchema = Joi.object({
+  amount: Joi.number().positive().required(),
+  recipientWalletId: Joi.string().required(),
+  description: Joi.string().optional(),
+});
 
-const createTransaction = async (req, res) => {
-    try {
-      const { error, value } = registerSchema.validate(req.body);
-  
-  
-      if (error) {
-        return res.status(400).json({ error: error.message });
-      }
-  
-      const transaction = await transactionService.createTransaction(value);
-      res.status(201).json({ data: new transactionResponse(transaction) });
-    } catch (error) {
-      console.log(error)
-      res.status(error.statusCode || 500).json({ error: error.message });
+const topUp = async (req, res, next) => {
+  try {
+    const { error, value } = topUpSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({ error: error.message });
     }
-  };
-  
-  const getTransactionById = async (req, res) => {
-      try {
-          const { id: user_id } = req.transaction;
-          const transaction = await transactionService.getTransactionById(Number(user_id));
-          res.status(200).json({data: new transactionResponse(transaction) });
-      } catch (error) {
-        if (error.messsage === "transaction not found") {
-          return res.status(404).json({ error: error.message});
-        }
-          res.status(error.statusCode || 500).json({ error: error.message });
-      }
-  
-  };
-  
-  module.exports = { createTransaction, getTransactionById };
+
+    const { amount, description } = value;
+    const walletId = req.user.walletId;
+
+    const transaction = await transactionService.topUp(
+      walletId,
+      amount,
+      description
+    );
+
+    res.status(201).json({ data: transaction });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const transfer = async (req, res, next) => {
+  try {
+    const { error, value } = transferSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    const { amount, recipientWalletId, description } = value;
+    const senderWalletId = req.user.walletId;
+
+    const transaction = await transactionService.transfer(
+      senderWalletId,
+      recipientWalletId,
+      amount,
+      description
+    );
+
+    res.status(201).json({ data: transaction });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getAllTransactions = async (req, res, next) => {
+  try {
+    const { walletId } = req.user;
+    const transactions = await transactionService.getAllTransactions(walletId);
+    res.status(200).json({ data: transactions });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { topUp, transfer, getAllTransactions };

@@ -1,25 +1,41 @@
 const Joi = require("joi");
 const userService = require("../services/users.service");
-const {UserResponse} = require("../dto/UserResponse");
+const { UserResponse } = require("../dto/userResponse");
+const {
+  UserAlreadyExistsError,
+  AuthenticationError,
+  NotFoundError,
+} = require("../dto/customErrors");
 
 const registerSchema = Joi.object({
   email: Joi.string().email().required(),
   username: Joi.string().required(),
   password: Joi.string().required(),
-  avatar_url: Joi.string().required(),
+  avatar_url: Joi.string().optional(),
   fullname: Joi.string().required(),
-  balance: Joi.string().optional(),
 });
 
-const LoginSchema = Joi.object({
+const loginSchema = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().required(),
 });
 
-const createUser = async (req, res) => {
+const getUserById = async (req, res, next) => {
+  try {
+    const { id } = req.user;
+    const user = await userService.getUserById(Number(id));
+    res.status(200).json({ data: new UserResponse(user) });
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    next(error);
+  }
+};
+
+const createUser = async (req, res, next) => {
   try {
     const { error, value } = registerSchema.validate(req.body);
-
 
     if (error) {
       return res.status(400).json({ error: error.message });
@@ -28,47 +44,32 @@ const createUser = async (req, res) => {
     const user = await userService.createUser(value);
     res.status(201).json({ data: new UserResponse(user) });
   } catch (error) {
-    console.log(error)
-    res.status(error.statusCode || 500).json({ error: error.message });
+    if (error instanceof UserAlreadyExistsError) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    next(error);
   }
 };
 
-const getUserById = async (req, res) => {
-    try {
-        const { id } = req.user;
-        const user = await userService.getUserById(Number(id));
-        res.status(200).json({data: new UserResponse(user) });
-    } catch (error) {
-      if (error.messsage === "user not found") {
-        return res.status(404).json({ error: error.message});
-      }
-        res.status(error.statusCode || 500).json({ error: error.message });
-    }
-
-};
-
-const Login = async (req, res) => {
+const login = async (req, res, next) => {
   try {
-    const {error, value } = LoginSchema.validate(req.body);
+    const { error, value } = loginSchema.validate(req.body);
 
     if (error) {
-      return res.status(400).json({ error : error.message});
+      return res.status(400).json({ error: error.message });
     }
-    console.log(value)
 
-    const token = await userService.Login(value);
-    res.status(200).json({ data: { token: token } });
+    const token = await userService.login(value);
+    res.status(200).json({ data: { token } });
   } catch (error) {
-    console.log(error)
-    if (error.message === "404") {
-      return res.status(404).json({ message: "user doesn't exist" });
+    if (error instanceof AuthenticationError) {
+      return res.status(error.status).json({ error: error.message });
     }
-
-    if (error.message === "401") {
-      return res.status(404).json({ message: "email or password not valid" });
+    if (error instanceof NotFoundError) {
+      return res.status(error.status).json({ error: error.message });
     }
-    res.status(500).json({ message: error.message });
+    next(error);
   }
 };
 
-module.exports = { createUser, getUserById, Login };
+module.exports = { createUser, getUserById, login };
