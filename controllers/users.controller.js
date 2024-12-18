@@ -1,6 +1,6 @@
 const Joi = require("joi");
 const userService = require("../services/users.service");
-const { UserResponse } = require("../dto/userResponse");
+const UserResponse = require("../dto/userResponse");
 const {
   UserAlreadyExistsError,
   AuthenticationError,
